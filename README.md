@@ -1,10 +1,5 @@
-![Project Organizer](./screenshot.png)
+![Project Organizer](./screenshot.jpg)
 # 🎬 Project Organizer for After Effects
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-%E2%98%95%EF%B8%8F-orange?style=flat-square)](https://www.buymeacoffee.com/jakkimcfly)
-![GitHub Repo Stars](https://img.shields.io/github/stars/jakkimcfly/project-organizer?style=flat-square)
-![GitHub Forks](https://img.shields.io/github/forks/jakkimcfly/project-organizer?style=flat-square)
-![GitHub license](https://img.shields.io/github/license/jakkimcfly/project-organizer?style=flat-square)
-![Platform](https://img.shields.io/badge/After%20Effects-Script-blueviolet?style=flat-square)
 
 **Project Organizer** is a simple but powerful script for Adobe After Effects that automatically sorts project items into folders based on their type (Videos, Images, Audio, Compositions, Solids, and more).  
 It helps you keep your project tidy and structured with a single click.
@@ -74,14 +69,3 @@ Feel free to contribute or fork this repository!
 
 ## 📃 License
 This project is licensed under the [MIT License](LICENSE).
-
-## 💬 Questions?
-Have a suggestion, issue or feature request? Feel free to [open an issue](https://github.com/jakkimcfly/project-organizer/issues/new/choose) or pull request!
-
-## ✨ Support
-
-If you find this script helpful, consider ⭐ starring the repo or buying me a coffee:
-
-<a href="https://www.buymeacoffee.com/jakkimcfly" target="_blank">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="54">
-</a>
