@@ -1,289 +1,637 @@
-// =======================================================================
-// Script Name: ProjectOrganizer
-// Description: Automatically organizes project items into folders by type
-// Author: Aleksandr Zakharov (https://github.com/jakkimcfly)
+// ======================================================================================
+// Script Name: HT AE Project Organizer v2.0.0
+// Description: Automatically organizes project items into folders.
+//              Rather than relying on user input, all sorting options here are hard-coded,
+//              based on HT's standard AE project template.
+// Author: Dave Hess (https://github.com/davemh)
+// Forked from: Project Organizer by Aleksandr Zakharov (https://github.com/jakkimcfly)
 // License: MIT
-// =======================================================================
+// ======================================================================================
 
 (function projectOrganizerScript() {
-    
-    var SCRIPT_NAME = "ProjectOrganizer";
-    var SCRIPT_VERSION = "1.0.0";
-    var PREF_SECTION = "ProjectOrganizerSettings";
 
-    var DEFAULT_VALUES = [
-        { folder: "Videos", defaultExtensions: "mp4,mov,avi,mkv" },
-        { folder: "Images", defaultExtensions: "jpg,jpeg,png,gif,tif,bmp" },
-        { folder: "Audio", defaultExtensions: "mp3,wav,aiff,aac" },
-        { folder: "Comp" },
-        { folder: "Solid" },
-        { folder: "Other" }
-    ];
-    var PANEL_INDEXES = {
-        Videos: 0,
-        Images: 1,
-        Audio: 2,
-        Comp: 3,
-        Solid: 4,
-        Other: 5
-    };
+    var SCRIPT_NAME = "HT AE Project Organizer";
+    var SCRIPT_VERSION = "2.0.0";
 
-    var PANELS = [];
+    // -------------------------------------------------------------------
+    // FILE EXTENSION HELPERS
+    // -------------------------------------------------------------------
 
-    /**
-     * Saves a setting value to the preferences.
-     * @param {string} key - The key name for the setting.
-     * @param {any} value - The value to be stored.
-     */
-    function saveSetting(key, value) {
-        app.settings.saveSetting(PREF_SECTION, key, value);
-    }
-
-    /**
-     * Loads a setting value from the preferences.
-     * @param {string} key - The key name for the setting.
-     * @param {any} defaultValue - The value to return if no setting is found.
-     * @returns {any} - The stored value or the default value.
-     */
-    function loadSetting(key, defaultValue) {
-        if (app.settings.haveSetting(PREF_SECTION, key) && app.settings.getSetting(PREF_SECTION, key) !== "null") {
-            return app.settings.getSetting(PREF_SECTION, key);
-        }
-        return defaultValue;
-    }
-
-    /**
-     * Clears a setting by setting its value to null.
-     * @param {string} key - The key name of the setting to clear.
-     */
-    function clearSetting(key) {
-        app.settings.saveSetting(PREF_SECTION, key, null);
-    }
-
-    /**
-     * Checks if a file has one of the provided extensions.
-     * @param {File} file - The file to check.
-     * @param {string} extensions - A comma-separated list of valid extensions.
-     * @returns {boolean} - True if file has one of the extensions.
-     */
     function hasExtension(file, extensions) {
+
         var fileName = file.name.toLowerCase();
         var extensionsArray = extensions.toLowerCase().split(",");
+
         for (var i = 0; i < extensionsArray.length; i++) {
-            var extension = extensionsArray[i].toLowerCase();
-            if (fileName.lastIndexOf(extension) === fileName.length - extension.length) {
+
+            var extension = extensionsArray[i].replace(/\s+/g, "");
+
+            if (fileName.match(new RegExp("\\." + extension + "$"))) {
                 return true;
             }
         }
+
         return false;
     }
 
-    /**
-     * Creates a panel in the UI for a media type (e.g., videos, images).
-     * @param {Panel|Window} win - The parent UI element.
-     * @param {string} name - The internal name of the panel.
-     * @param {string} title - The visible title of the panel.
-     * @param {number} index - Index corresponding to DEFAULT_VALUES.
-     * @param {boolean} [hasExtensions] - Whether this panel should include an extensions input field.
-     * @returns {Object} - UI components for this panel.
-     */
-    function createPanel(win, name, title, index, hasExtensions) {
-        if (hasExtensions === undefined) hasExtensions = true;
+    // -------------------------------------------------------------------
+    // IMAGE SEQUENCE DETECTION
+    // -------------------------------------------------------------------
 
-        var panel = win.add("panel", undefined, title);
-        panel.orientation = "row";
-        panel.alignChildren = "center";
+    function detectImageSequences(imageItems) {
 
-        var checkbox = panel.add("checkbox", undefined, "");
-        checkbox.value = loadSetting(name + "_Value", "true") === "true";
+        var sequences = [];
+        var processedItems = {};
 
-        var folderInput = panel.add("edittext", [0, 0, 150, 20], loadSetting(name + "_Folder", DEFAULT_VALUES[index].folder));
-        var extensionsInput = null;
-        if (hasExtensions) {
-            panel.add("statictext", undefined, "Extensions:");
-            extensionsInput = panel.add("edittext", [0, 0, 150, 20], loadSetting(name + "_Extensions", DEFAULT_VALUES[index].defaultExtensions));
+        for (var i = 0; i < imageItems.length; i++) {
+
+            var item = imageItems[i];
+
+            if (processedItems[item.name]) {
+                continue;
+            }
+
+            var match = item.name.match(/^(.+?)_?(\d{2,})(?:\.\w+)?$/);
+
+            if (!match) {
+                continue;
+            }
+
+            var base = match[1];
+            var currentNum = parseInt(match[2], 10);
+
+            var sequence = [item];
+
+            processedItems[item.name] = true;
+
+            var nextNum = currentNum + 1;
+            var found = true;
+
+            while (found) {
+
+                found = false;
+
+                for (var j = 0; j < imageItems.length; j++) {
+
+                    var nextItem = imageItems[j];
+
+                    if (processedItems[nextItem.name]) {
+                        continue;
+                    }
+
+                    var nextMatch = nextItem.name.match(
+                        /^(.+?)_?(\d{2,})(?:\.\w+)?$/
+                    );
+
+                    if (
+                        nextMatch &&
+                        nextMatch[1] === base &&
+                        parseInt(nextMatch[2], 10) === nextNum
+                    ) {
+
+                        sequence.push(nextItem);
+
+                        processedItems[nextItem.name] = true;
+
+                        nextNum++;
+                        found = true;
+
+                        break;
+                    }
+                }
+            }
+
+            // Only count as a sequence if 3+ files
+
+            if (sequence.length >= 3) {
+
+                sequences.push(sequence);
+
+            } else {
+
+                for (var k = 0; k < sequence.length; k++) {
+                    delete processedItems[sequence[k].name];
+                }
+            }
         }
 
-        return { name: name, checkbox: checkbox, folderInput: folderInput, extensionsInput: extensionsInput };
+        return sequences;
     }
 
-    /**
-     * Builds the full user interface for the script.
-     * @param {any} thisObj - Context in which the UI is created.
-     * @returns {Panel|Window} - The created UI panel or window.
-     */
-    function createUI(thisObj) {
-        var win = (thisObj instanceof Panel) ? thisObj : new Window("palette", SCRIPT_NAME + " " + SCRIPT_VERSION, undefined);
-        win.orientation = "column";
-        win.alignChildren = "center";
+    // -------------------------------------------------------------------
+    // PRECOMP DETECTION
+    // -------------------------------------------------------------------
 
-        // Header
-        var headerGroup = win.add("group");
-        headerGroup.orientation = "column";
-        headerGroup.alignment = "center";
-        headerGroup.add("statictext", undefined, SCRIPT_NAME + " " + SCRIPT_VERSION);
-        headerGroup.add("statictext", undefined, "Automatically organize items into folders by type");
+    function isPrecomp(comp) {
 
-        // Divider
-        var divider = win.add("panel", undefined, undefined, { borderStyle: "sunken" });
-        divider.alignment = "fill";
+        for (var i = 1; i <= app.project.numItems; i++) {
 
-        // Media panels
-        PANELS = [
-            createPanel(win, "Videos", "Videos Folder", PANEL_INDEXES.Videos),
-            createPanel(win, "Images", "Images Folder", PANEL_INDEXES.Images),
-            createPanel(win, "Audio", "Audio Folder", PANEL_INDEXES.Audio),
-            createPanel(win, "Comp", "Compositions", PANEL_INDEXES.Comp, false),
-            createPanel(win, "Solid", "Solids Folder", PANEL_INDEXES.Solid, false),
-            createPanel(win, "Other", "Other Folder", PANEL_INDEXES.Other, false)
-        ];
+            var item = app.project.item(i);
 
-        // Exclusion settings
-        var exclusionPanel = win.add("panel", undefined, "Exclude files containing:");
-        exclusionPanel.orientation = "column";
-        var radioGroup = exclusionPanel.add("group");
-        radioGroup.orientation = "row";
-        var filterByName = radioGroup.add("radiobutton", undefined, "Exclude by name");
-        var filterByComment = radioGroup.add("radiobutton", undefined, "Exclude by comment");
-        switch (loadSetting("ExclusionPanel_Value", "name")) {
-            case "comment":
-                filterByComment.value = true
-                break;
-            default:
-                filterByName.value = true;
+            if (
+                item instanceof CompItem &&
+                item !== comp
+            ) {
+
+                for (var j = 1; j <= item.numLayers; j++) {
+
+                    var layer = item.layer(j);
+
+                    if (layer.source === comp) {
+                        return true;
+                    }
+                }
+            }
         }
-        var exclusionInput = exclusionPanel.add("edittext", undefined, loadSetting("ExclusionPanel_Text", ""));
-        exclusionInput.characters = 20;
 
-        // Buttons
-        var btnsGroup = win.add("group");
-        btnsGroup.orientation = "row";
-        var btnSubmit = btnsGroup.add("button", undefined, "Submit");
-        var btnReset = btnsGroup.add("button", undefined, "Reset Values");
+        return false;
+    }
 
-        // Divider
-        var divider = win.add("panel", undefined, undefined, { borderStyle: "sunken" });
-        divider.alignment = "fill";
+    // -------------------------------------------------------------------
+    // UI
+    // -------------------------------------------------------------------
 
-        // Footer
-        var footerGroup = win.add("group");
-        footerGroup.orientation = "column";
-        footerGroup.alignment = "center";
-        footerGroup.add("statictext", undefined, "Author: Aleksandr Zakharov");
-        footerGroup.add("statictext", undefined, "GitHub: github.com/jakkimcfly");
-        footerGroup.add("statictext", undefined, "License: MIT");
+    function createUI(thisObj) {
 
-        /**
-         * Event handler for the Submit button.
-         * Organizes project items into folders based on user-defined settings.
-         */
-        btnSubmit.onClick = function () {
+        var win = (thisObj instanceof Panel)
+            ? thisObj
+            : new Window(
+                "palette",
+                SCRIPT_NAME + " " + SCRIPT_VERSION,
+                undefined
+            );
+
+        win.orientation = "column";
+        win.alignChildren = ["fill", "top"];
+        win.spacing = 10;
+        win.margins = 16;
+
+        // ---------------------------------------------------------------
+        // HEADER
+        // ---------------------------------------------------------------
+
+        var header = win.add("group");
+
+        header.orientation = "column";
+        header.alignChildren = "center";
+
+        header.add(
+            "statictext",
+            undefined,
+            SCRIPT_NAME + " " + SCRIPT_VERSION
+        );
+
+        var desc = header.add(
+            "statictext",
+            undefined,
+            "Organizes project items into the standard folder structure.",
+            { multiline: true }
+        );
+
+        desc.justify = "center";
+
+        // ---------------------------------------------------------------
+        // FOLDER STRUCTURE PREVIEW
+        // ---------------------------------------------------------------
+
+        var treePanel = win.add(
+            "panel",
+            undefined,
+            "Folder Structure"
+        );
+
+        treePanel.alignChildren = ["left", "top"];
+        treePanel.margins = 12;
+
+        var treeText =
+            "_Organized\n" +
+            "├─ 01. Assets\n" +
+            "│  ├─ 00. Solids\n" +
+            "│  ├─ 01. Images\n" +
+            "│  │  └─ seq01, seq02, etc.\n" +
+            "│  ├─ 02. Graphics\n" +
+            "│  ├─ 03. Videos\n" +
+            "│  ├─ 04. Audio\n" +
+            "│  └─ Other\n" +
+            "└─ 02. Comps\n" +
+            "   ├─ 01. Precomps\n" +
+            "   └─ 02. Render Comps";
+
+        treePanel.add(
+            "statictext",
+            undefined,
+            treeText,
+            { multiline: true }
+        );
+
+        // ---------------------------------------------------------------
+        // EXCLUSION SETTINGS
+        // ---------------------------------------------------------------
+
+        var exclusionPanel = win.add(
+            "panel",
+            undefined,
+            "Exclude Items"
+        );
+
+        exclusionPanel.orientation = "column";
+        exclusionPanel.alignChildren = ["left", "top"];
+        exclusionPanel.margins = 12;
+
+        var radioGroup = exclusionPanel.add("group");
+
+        radioGroup.orientation = "row";
+
+        var filterByName = radioGroup.add(
+            "radiobutton",
+            undefined,
+            "Exclude by name"
+        );
+
+        var filterByComment = radioGroup.add(
+            "radiobutton",
+            undefined,
+            "Exclude by comment"
+        );
+
+        filterByName.value = true;
+
+        var exclusionInput = exclusionPanel.add(
+            "edittext",
+            undefined,
+            ""
+        );
+
+        exclusionInput.characters = 30;
+
+        // ---------------------------------------------------------------
+        // BUTTONS
+        // ---------------------------------------------------------------
+
+        var buttonGroup = win.add("group");
+
+        buttonGroup.alignment = "center";
+
+        var organizeButton = buttonGroup.add(
+            "button",
+            undefined,
+            "Organize Project"
+        );
+
+        // ---------------------------------------------------------------
+        // ORGANIZE BUTTON
+        // ---------------------------------------------------------------
+
+        organizeButton.onClick = function () {
+
             app.beginUndoGroup("Organize Project Items");
 
-            var folders = {};
-            var projectItems = [];
-            var exclusionText = exclusionInput.text.toLowerCase();
+            try {
 
-            // Create folders if enabled
-            for (var i = 0; i < PANELS.length; i++) {
-                if (PANELS[i].checkbox.value && PANELS[i].folderInput.text) {
-                    folders[DEFAULT_VALUES[i].folder] = app.project.items.addFolder(PANELS[i].folderInput.text);
-                }
-                saveSetting(PANELS[i].name + "_Folder", PANELS[i].folderInput.text);
-                if (PANELS[i].extensionsInput) saveSetting(PANELS[i].name + "_Extensions", PANELS[i].extensionsInput.text);
-                saveSetting(PANELS[i].name + "_Value", PANELS[i].checkbox.value);
-            }
+                var exclusionText =
+                    exclusionInput.text.toLowerCase();
 
-            saveSetting("ExclusionPanel_Text", exclusionInput.text);
-            saveSetting("ExclusionPanel_Value", filterByName.value ? "name" : "comment");
+                // -------------------------------------------------------
+                // CREATE ROOT FOLDERS
+                // -------------------------------------------------------
 
-            // Filter items based on exclusion rules
-            for (var i = 1; i <= app.project.numItems; i++) {
-                var item = app.project.item(i);
-                var itemName = item.name.toLowerCase();
-                var itemComment = item.comment ? item.comment.toLowerCase() : "";
+                var organizedFolder =
+                    app.project.items.addFolder("_Organized");
 
-                var exclude = false;
-                if (filterByName.value && exclusionText) {
-                    exclude = itemName.indexOf(exclusionText) !== -1;
-                } else if (filterByComment.value && exclusionText) {
-                    exclude = itemComment.indexOf(exclusionText) !== -1;
-                }
-                if (!exclude) {
-                    projectItems.push(item);
-                }
-            }
+                var assetsFolder =
+                    app.project.items.addFolder("01. Assets");
 
-            // Move items to corresponding folders
-            for (var i = 0; i < projectItems.length; i++) {
-                var item = projectItems[i];
-                if (item instanceof FolderItem) continue;
-                var moved = false;
+                assetsFolder.parentFolder = organizedFolder;
 
-                if (PANELS[PANEL_INDEXES.Comp].checkbox.value && item instanceof CompItem) {
-                    item.parentFolder = folders[DEFAULT_VALUES[PANEL_INDEXES.Comp].folder];
-                    moved = true;
-                }
+                var compsFolder =
+                    app.project.items.addFolder("02. Comps");
 
-                if (item instanceof FootageItem) {
-                    if (PANELS[PANEL_INDEXES.Solid].checkbox.value && item.mainSource instanceof SolidSource) {
-                        item.parentFolder = folders[DEFAULT_VALUES[PANEL_INDEXES.Solid].folder];
-                        moved = true;
-                    } else if (item.file) {
+                compsFolder.parentFolder = organizedFolder;
 
-                        if (PANELS[PANEL_INDEXES.Videos].checkbox.value && hasExtension(item.file, PANELS[PANEL_INDEXES.Videos].extensionsInput.text)) {
-                            item.parentFolder = folders[DEFAULT_VALUES[PANEL_INDEXES.Videos].folder];
-                            moved = true;
+                // -------------------------------------------------------
+                // ASSETS SUBFOLDERS
+                // -------------------------------------------------------
+
+                var solidsFolder =
+                    app.project.items.addFolder("00. Solids");
+
+                solidsFolder.parentFolder = assetsFolder;
+
+                var imagesFolder =
+                    app.project.items.addFolder("01. Images");
+
+                imagesFolder.parentFolder = assetsFolder;
+
+                var graphicsFolder =
+                    app.project.items.addFolder("02. Graphics");
+
+                graphicsFolder.parentFolder = assetsFolder;
+
+                var videosFolder =
+                    app.project.items.addFolder("03. Videos");
+
+                videosFolder.parentFolder = assetsFolder;
+
+                var audioFolder =
+                    app.project.items.addFolder("04. Audio");
+
+                audioFolder.parentFolder = assetsFolder;
+
+                var otherFolder =
+                    app.project.items.addFolder("Other");
+
+                otherFolder.parentFolder = assetsFolder;
+
+                // -------------------------------------------------------
+                // COMPS SUBFOLDERS
+                // -------------------------------------------------------
+
+                var precompsFolder =
+                    app.project.items.addFolder("01. Precomps");
+
+                precompsFolder.parentFolder = compsFolder;
+
+                var renderCompsFolder =
+                    app.project.items.addFolder("02. Render Comps");
+
+                renderCompsFolder.parentFolder = compsFolder;
+
+                // -------------------------------------------------------
+                // COLLECT PROJECT ITEMS
+                // -------------------------------------------------------
+
+                var projectItems = [];
+
+                for (
+                    var i = 1;
+                    i <= app.project.numItems;
+                    i++
+                ) {
+
+                    var item = app.project.item(i);
+
+                    if (item instanceof FolderItem) {
+                        continue;
+                    }
+
+                    var itemName =
+                        item.name.toLowerCase();
+
+                    var itemComment =
+                        item.comment
+                            ? item.comment.toLowerCase()
+                            : "";
+
+                    var exclude = false;
+
+                    if (exclusionText !== "") {
+
+                        if (filterByName.value) {
+
+                            exclude =
+                                itemName.indexOf(exclusionText) !== -1;
+
+                        } else {
+
+                            exclude =
+                                itemComment.indexOf(exclusionText) !== -1;
                         }
+                    }
 
-                        if (PANELS[PANEL_INDEXES.Images].checkbox.value && hasExtension(item.file, PANELS[PANEL_INDEXES.Images].extensionsInput.text)) {
-                            item.parentFolder = folders[DEFAULT_VALUES[PANEL_INDEXES.Images].folder];
-                            moved = true;
-                        }
-
-                        if (PANELS[PANEL_INDEXES.Audio].checkbox.value && hasExtension(item.file, PANELS[PANEL_INDEXES.Audio].extensionsInput.text)) {
-                            item.parentFolder = folders[DEFAULT_VALUES[PANEL_INDEXES.Audio].folder];
-                            moved = true;
-                        }
+                    if (!exclude) {
+                        projectItems.push(item);
                     }
                 }
 
-                if (!moved && PANELS[PANEL_INDEXES.Other].checkbox.value) {
-                    item.parentFolder = folders[DEFAULT_VALUES[PANEL_INDEXES.Other].folder];
+                // -------------------------------------------------------
+                // DETECT IMAGE SEQUENCES
+                // -------------------------------------------------------
+
+                var imageItems = [];
+
+                for (i = 0; i < projectItems.length; i++) {
+
+                    item = projectItems[i];
+
+                    if (
+                        item instanceof FootageItem &&
+                        item.file &&
+                        hasExtension(
+                            item.file,
+                            "jpg,jpeg,png,tif,tiff,bmp,gif,exr"
+                        )
+                    ) {
+
+                        imageItems.push(item);
+                    }
                 }
+
+                var sequences =
+                    detectImageSequences(imageItems);
+
+                var sequencedItems = {};
+
+                for (var s = 0; s < sequences.length; s++) {
+
+                    for (
+                        var si = 0;
+                        si < sequences[s].length;
+                        si++
+                    ) {
+
+                        sequencedItems[
+                            sequences[s][si].name
+                        ] = s;
+                    }
+                }
+
+                // -------------------------------------------------------
+                // CREATE SEQUENCE FOLDERS
+                // -------------------------------------------------------
+
+                var sequenceFolders = {};
+
+                for (s = 0; s < sequences.length; s++) {
+
+                    var seqName =
+                        "seq" +
+                        ("0" + (s + 1)).slice(-2);
+
+                    sequenceFolders[s] =
+                        app.project.items.addFolder(seqName);
+
+                    sequenceFolders[s].parentFolder =
+                        imagesFolder;
+                }
+
+                // -------------------------------------------------------
+                // ORGANIZE ITEMS
+                // -------------------------------------------------------
+
+                for (i = 0; i < projectItems.length; i++) {
+
+                    item = projectItems[i];
+
+                    var moved = false;
+
+                    // ---------------------------------------------------
+                    // COMPOSITIONS
+                    // ---------------------------------------------------
+
+                    if (item instanceof CompItem) {
+
+                        if (isPrecomp(item)) {
+
+                            item.parentFolder =
+                                precompsFolder;
+
+                        } else {
+
+                            item.parentFolder =
+                                renderCompsFolder;
+                        }
+
+                        moved = true;
+                    }
+
+                    // ---------------------------------------------------
+                    // FOOTAGE
+                    // ---------------------------------------------------
+
+                    else if (
+                        item instanceof FootageItem
+                    ) {
+
+                        // Solids
+
+                        if (
+                            item.mainSource instanceof SolidSource
+                        ) {
+
+                            item.parentFolder =
+                                solidsFolder;
+
+                            moved = true;
+                        }
+
+                        // Files
+
+                        else if (item.file) {
+
+                            // Sequences
+
+                            if (
+                                sequencedItems[item.name] !==
+                                undefined
+                            ) {
+
+                                item.parentFolder =
+                                    sequenceFolders[
+                                        sequencedItems[item.name]
+                                    ];
+
+                                moved = true;
+                            }
+
+                            // Graphics
+
+                            else if (
+                                hasExtension(
+                                    item.file,
+                                    "psd"
+                                )
+                            ) {
+
+                                item.parentFolder =
+                                    graphicsFolder;
+
+                                moved = true;
+                            }
+
+                            // Images
+
+                            else if (
+                                hasExtension(
+                                    item.file,
+                                    "jpg,jpeg,png,tif,tiff,bmp,gif,exr"
+                                )
+                            ) {
+
+                                item.parentFolder =
+                                    imagesFolder;
+
+                                moved = true;
+                            }
+
+                            // Videos
+
+                            else if (
+                                hasExtension(
+                                    item.file,
+                                    "mp4,mov,avi,mxf"
+                                )
+                            ) {
+
+                                item.parentFolder =
+                                    videosFolder;
+
+                                moved = true;
+                            }
+
+                            // Audio
+
+                            else if (
+                                hasExtension(
+                                    item.file,
+                                    "wav,mp3,aif,aiff,m4a"
+                                )
+                            ) {
+
+                                item.parentFolder =
+                                    audioFolder;
+
+                                moved = true;
+                            }
+                        }
+                    }
+
+                    // ---------------------------------------------------
+                    // FALLBACK
+                    // ---------------------------------------------------
+
+                    if (!moved) {
+
+                        item.parentFolder =
+                            otherFolder;
+                    }
+                }
+
+            } catch (err) {
+
+                alert(
+                    "Error organizing project:\n\n" +
+                    err.toString()
+                );
             }
 
             app.endUndoGroup();
         };
 
-        /**
-         * Event handler for the Reset button.
-         * Restores default values and clears saved settings.
-         */
-        btnReset.onClick = function () {
-            for (var i = 0; i < PANELS.length; i++) {
-                PANELS[i].checkbox.value = true;
-                PANELS[i].folderInput.text = DEFAULT_VALUES[i].folder;
-                if (PANELS[i].extensionsInput) PANELS[i].extensionsInput.text = DEFAULT_VALUES[i].defaultExtensions;
-
-                clearSetting(PANELS[i].name + "_Folder");
-                clearSetting(PANELS[i].name + "_Extensions");
-                clearSetting(PANELS[i].name + "_Value");
-            }
-
-            exclusionInput.text = "";
-            filterByName.value = true;
-            clearSetting("ExclusionPanel_Text");
-            clearSetting("ExclusionPanel_Value");
-        }
         win.layout.layout(true);
+
         return win;
     }
 
-    // Initialize and show UI
+    // -------------------------------------------------------------------
+    // INITIALIZE UI
+    // -------------------------------------------------------------------
+
     var ui = createUI(this);
+
     if (ui instanceof Window) {
+
         ui.center();
         ui.show();
     }
+
 })();
