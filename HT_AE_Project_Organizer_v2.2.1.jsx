@@ -1,5 +1,5 @@
 // =======================================================================
-// Script Name: HT AE Project Organizer 2.2.0
+// Script Name: HT AE Project Organizer 2.2.1
 // Description: Automatically organizes project items into folders
 //              All options hard-coded, based on HT's standard AE project template.
 // Author: 	Dave Hess
@@ -9,7 +9,7 @@
 
 (function projectOrganizerScript() {
 var SCRIPT_NAME = "HT AE Project Organizer";
-var SCRIPT_VERSION = "2.2.0";
+var SCRIPT_VERSION = "2.2.1";
 
 // ------------------------------------------------------------------
 // FILE EXTENSION HELPERS
@@ -342,21 +342,6 @@ groupFolders[s] = app.project.items.addFolder(groupName);
 groupFolders[s].parentFolder = imagesFolder;
 }
 
-// Create folders for imported sequences
-var seqFolderMap = {};
-var seqCounter = 0;
-for (i = 1; i <= app.project.numItems; i++) {
-    item = app.project.item(i);
-
-    if (isImportedImageSequence(item)) {
-        if (!seqFolderMap[item.name]) {
-            var seqFolderName = item.name;
-            var seqSubFolder = app.project.items.addFolder(seqFolderName);
-            seqSubFolder.parentFolder = seqFolder;
-            seqFolderMap[item.name] = seqSubFolder;
-        }
-    }
-}
 // ------------------------------------------------------------------
 // ORGANIZE ITEMS
 // ------------------------------------------------------------------
@@ -388,7 +373,7 @@ moved = true;
 else if (item.file) {
 // AE Imported Sequences
 if (isImportedImageSequence(item)) {
-    item.parentFolder = seqFolderMap[item.name] || seqFolder;
+    item.parentFolder = seqFolder;
     moved = true;
 }
 // Sequentially numbered groups (in Images folder)
